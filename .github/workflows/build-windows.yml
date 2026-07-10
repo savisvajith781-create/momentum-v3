@@ -1,0 +1,44 @@
+name: Build Windows App
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Generate a clean, official Windows scaffold
+        shell: pwsh
+        run: |
+          flutter create --platforms=windows --project-name momentum --org com.momentum _scaffold_temp
+          Remove-Item -Recurse -Force windows
+          Move-Item _scaffold_temp/windows windows
+          Remove-Item -Recurse -Force _scaffold_temp
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Zip the built app
+        run: |
+          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath "Momentum-Windows.zip"
+        shell: pwsh
+
+      - name: Upload build as downloadable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Momentum-Windows-App
+          path: Momentum-Windows.zip
