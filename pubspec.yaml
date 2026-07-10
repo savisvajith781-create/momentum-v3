@@ -1,0 +1,61 @@
+name: momentum
+description: Minimal Study Tracker for CA Final Students
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # State Management
+  flutter_riverpod: ^2.4.9
+  
+  # Database
+  sqflite_common_ffi: ^2.3.2
+  
+  # Local Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.2.2
+  
+  # Charts
+  fl_chart: ^0.66.2
+  
+  # Fonts
+  google_fonts: ^6.1.0
+  
+  # Utilities
+  intl: ^0.18.1
+  uuid: ^4.3.3
+  
+  # Export
+  pdf: ^3.10.8
+  csv: ^5.1.1
+  
+  # Animations
+  animations: ^2.0.8
+  
+  # Window Management
+  window_manager: ^0.4.3
+  
+  # Path
+  path: ^1.9.0
+  path_provider: ^2.1.2
+  
+  # Icons
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/quotes.json
