@@ -17,7 +17,7 @@ final allSessionsProvider = FutureProvider<List<SessionModel>>((ref) async {
   return ref.read(sessionRepositoryProvider).getAllSessions();
 });
 
-final sessionsByDateRangeProvider = FutureProvider.family
+final sessionsByDateRangeProvider = FutureProvider.family<
     List<SessionModel>,
     ({DateTime start, DateTime end})>((ref, range) async {
   return ref.read(sessionRepositoryProvider).getSessionsByDateRange(
