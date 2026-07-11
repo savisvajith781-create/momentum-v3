@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import '../providers/sessions_provider.dart';
 import '../providers/subjects_provider.dart';
 import '../providers/stages_provider.dart';
+import '../providers/core_providers.dart';
+import '../providers/timer_provider.dart';
 import '../models/session_model.dart';
 import '../theme/app_colors.dart';
 import '../utils/format_utils.dart';
@@ -317,18 +320,38 @@ class _SessionsPanel extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            FormatUtils.isToday(date)
-                ? 'Today'
-                : FormatUtils.isYesterday(date)
-                    ? 'Yesterday'
-                    : DateFormat('EEEE, MMMM d').format(date),
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.4,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  FormatUtils.isToday(date)
+                      ? 'Today'
+                      : FormatUtils.isYesterday(date)
+                          ? 'Yesterday'
+                          : DateFormat('EEEE, MMMM d').format(date),
+                  style: const TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.4,
+                  ),
+                ),
+              ),
+              if (!date.isAfter(DateTime.now()))
+                ElevatedButton.icon(
+                  onPressed: () => showDialog(
+                    context: context,
+                    builder: (_) => _ManualSessionDialog(date: date),
+                  ),
+                  icon: const Icon(Icons.add_rounded, size: 18),
+                  label: const Text('Add Session'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    textStyle: const TextStyle(fontSize: 13),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 20),
           sessionsAsync.when(
@@ -388,12 +411,23 @@ class _EmptyState extends StatelessWidget {
             Text(
               isFuture
                   ? 'Select a past date to view sessions'
-                  : 'Start a timer to record a session',
+                  : 'Start a timer, or add one manually',
               style: const TextStyle(
                 color: AppColors.textMuted,
                 fontSize: 13,
               ),
             ),
+            if (!isFuture) ...[
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () => showDialog(
+                  context: context,
+                  builder: (_) => _ManualSessionDialog(date: date),
+                ),
+                icon: const Icon(Icons.add_rounded, size: 18),
+                label: const Text('Add Session Manually'),
+              ),
+            ],
           ],
         ),
       ),
@@ -413,6 +447,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> {
   bool _editing = false;
   late TextEditingController _chapterCtrl;
   late TextEditingController _notesCtrl;
+  late TextEditingController _hoursCtrl;
+  late TextEditingController _minutesCtrl;
   late String _revisionStage;
 
   @override
@@ -420,6 +456,10 @@ class _SessionCardState extends ConsumerState<_SessionCard> {
     super.initState();
     _chapterCtrl = TextEditingController(text: widget.session.chapter);
     _notesCtrl = TextEditingController(text: widget.session.notes ?? '');
+    final totalSeconds = widget.session.durationSeconds;
+    _hoursCtrl = TextEditingController(text: (totalSeconds ~/ 3600).toString());
+    _minutesCtrl = TextEditingController(
+        text: ((totalSeconds % 3600) ~/ 60).toString());
     _revisionStage = widget.session.revisionStage;
   }
 
@@ -427,10 +467,21 @@ class _SessionCardState extends ConsumerState<_SessionCard> {
   void dispose() {
     _chapterCtrl.dispose();
     _notesCtrl.dispose();
+    _hoursCtrl.dispose();
+    _minutesCtrl.dispose();
     super.dispose();
   }
 
   void _saveEdit() {
+    final hours = int.tryParse(_hoursCtrl.text.trim()) ?? 0;
+    final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 0;
+    final newDurationSeconds = (hours * 3600) + (minutes * 60);
+
+    if (newDurationSeconds <= 0) return;
+
+    final newEndTime =
+        widget.session.startTime.add(Duration(seconds: newDurationSeconds));
+
     ref.read(sessionsEditProvider.notifier).updateSession(
           widget.session.copyWith(
             chapter: _chapterCtrl.text.trim(),
@@ -438,6 +489,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> {
                 ? null
                 : _notesCtrl.text.trim(),
             revisionStage: _revisionStage,
+            durationSeconds: newDurationSeconds,
+            endTime: newEndTime,
           ),
         );
     setState(() => _editing = false);
@@ -547,6 +600,8 @@ class _SessionCardState extends ConsumerState<_SessionCard> {
                 ? _EditView(
                     chapterCtrl: _chapterCtrl,
                     notesCtrl: _notesCtrl,
+                    hoursCtrl: _hoursCtrl,
+                    minutesCtrl: _minutesCtrl,
                     revisionStage: _revisionStage,
                     onStageChanged: (v) =>
                         setState(() => _revisionStage = v),
@@ -640,6 +695,8 @@ class _ReadView extends StatelessWidget {
 class _EditView extends ConsumerWidget {
   final TextEditingController chapterCtrl;
   final TextEditingController notesCtrl;
+  final TextEditingController hoursCtrl;
+  final TextEditingController minutesCtrl;
   final String revisionStage;
   final ValueChanged<String> onStageChanged;
   final VoidCallback onSave;
@@ -648,6 +705,8 @@ class _EditView extends ConsumerWidget {
   const _EditView({
     required this.chapterCtrl,
     required this.notesCtrl,
+    required this.hoursCtrl,
+    required this.minutesCtrl,
     required this.revisionStage,
     required this.onStageChanged,
     required this.onSave,
@@ -703,6 +762,38 @@ class _EditView extends ConsumerWidget {
           ],
         ),
         const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: hoursCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 14),
+                decoration: const InputDecoration(
+                  labelText: 'Hours',
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextFormField(
+                controller: minutesCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 14),
+                decoration: const InputDecoration(
+                  labelText: 'Minutes',
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
         TextFormField(
           controller: notesCtrl,
           style: const TextStyle(
@@ -722,6 +813,287 @@ class _EditView extends ConsumerWidget {
             const SizedBox(width: 8),
             ElevatedButton(onPressed: onSave, child: const Text('Save')),
           ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ManualSessionDialog extends ConsumerStatefulWidget {
+  final DateTime date;
+  const _ManualSessionDialog({required this.date});
+
+  @override
+  ConsumerState<_ManualSessionDialog> createState() =>
+      _ManualSessionDialogState();
+}
+
+class _ManualSessionDialogState extends ConsumerState<_ManualSessionDialog> {
+  String? _selectedSubjectId;
+  String? _selectedStage;
+  final _chapterCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  final _hoursCtrl = TextEditingController(text: '1');
+  final _minutesCtrl = TextEditingController(text: '0');
+  TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _chapterCtrl.dispose();
+    _notesCtrl.dispose();
+    _hoursCtrl.dispose();
+    _minutesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: AppColors.primary,
+            surface: AppColors.surface,
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _startTime = picked);
+  }
+
+  Future<void> _submit(List subjects) async {
+    if (_selectedSubjectId == null || subjects.isEmpty) return;
+
+    final hours = int.tryParse(_hoursCtrl.text.trim()) ?? 0;
+    final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 0;
+    final durationSeconds = (hours * 3600) + (minutes * 60);
+
+    if (durationSeconds <= 0) return;
+
+    final subject = subjects.firstWhere(
+      (s) => s.id == _selectedSubjectId,
+      orElse: () => subjects.first,
+    );
+
+    setState(() => _saving = true);
+
+    final startDateTime = DateTime(
+      widget.date.year,
+      widget.date.month,
+      widget.date.day,
+      _startTime.hour,
+      _startTime.minute,
+    );
+    final endDateTime = startDateTime.add(Duration(seconds: durationSeconds));
+
+    final stages = ref.read(stagesProvider);
+    final stage = _selectedStage ?? (stages.isNotEmpty ? stages.first : 'Session');
+
+    final session = SessionModel(
+      id: const Uuid().v4(),
+      subjectId: subject.id,
+      subjectName: subject.name,
+      chapter: _chapterCtrl.text.trim().isEmpty
+          ? subject.name
+          : _chapterCtrl.text.trim(),
+      revisionStage: stage,
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      startTime: startDateTime,
+      endTime: endDateTime,
+      durationSeconds: durationSeconds,
+    );
+
+    await ref.read(sessionRepositoryProvider).insertSession(session);
+
+    // Refresh whatever views might be showing this data.
+    ref.invalidate(sessionsByDateProvider(widget.date));
+    ref.invalidate(allSessionsProvider);
+    if (FormatUtils.isToday(widget.date)) {
+      ref.invalidate(todaySessionsProvider);
+      ref.invalidate(todayTotalSecondsProvider);
+      ref.invalidate(todaySubjectBreakdownProvider);
+    }
+
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subjectsAsync = ref.watch(subjectsProvider);
+    final stages = ref.watch(stagesProvider);
+
+    return AlertDialog(
+      title: const Text('Add Session Manually'),
+      content: SizedBox(
+        width: 440,
+        child: subjectsAsync.when(
+          data: (subjects) {
+            if (subjects.isNotEmpty && _selectedSubjectId == null) {
+              _selectedSubjectId = subjects.first.id;
+            }
+            if (stages.isNotEmpty && _selectedStage == null) {
+              _selectedStage = stages.first;
+            }
+
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'For ${FormatUtils.formatDate(widget.date)}',
+                    style: const TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (subjects.isEmpty)
+                    const Text(
+                      'Add a subject first (Settings → Subjects)',
+                      style: TextStyle(color: AppColors.red, fontSize: 13),
+                    )
+                  else
+                    DropdownButtonFormField<String>(
+                      value: _selectedSubjectId,
+                      decoration: const InputDecoration(labelText: 'Subject'),
+                      dropdownColor: AppColors.surfaceVariant,
+                      style: const TextStyle(
+                          color: AppColors.textPrimary, fontSize: 14),
+                      items: subjects
+                          .map<DropdownMenuItem<String>>((s) => DropdownMenuItem(
+                                value: s.id,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(s.icon,
+                                        style: const TextStyle(fontSize: 14)),
+                                    const SizedBox(width: 8),
+                                    Text(s.name),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
+                      onChanged: (v) => setState(() => _selectedSubjectId = v),
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _chapterCtrl,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary, fontSize: 14),
+                          decoration: const InputDecoration(
+                            labelText: 'Chapter / Topic',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      SizedBox(
+                        width: 130,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedStage,
+                          decoration: const InputDecoration(labelText: 'Stage'),
+                          dropdownColor: AppColors.surfaceVariant,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary, fontSize: 14),
+                          items: stages
+                              .map((s) =>
+                                  DropdownMenuItem(value: s, child: Text(s)))
+                              .toList(),
+                          onChanged: (v) => setState(() => _selectedStage = v),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _hoursCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary, fontSize: 14),
+                          decoration: const InputDecoration(labelText: 'Hours'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _minutesCtrl,
+                          keyboardType: TextInputType.number,
+                          style: const TextStyle(
+                              color: AppColors.textPrimary, fontSize: 14),
+                          decoration:
+                              const InputDecoration(labelText: 'Minutes'),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: InkWell(
+                          onTap: _pickStartTime,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InputDecorator(
+                            decoration:
+                                const InputDecoration(labelText: 'Start'),
+                            child: Text(
+                              _startTime.format(context),
+                              style: const TextStyle(
+                                color: AppColors.textPrimary,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _notesCtrl,
+                    maxLines: 2,
+                    style: const TextStyle(
+                        color: AppColors.textPrimary, fontSize: 14),
+                    decoration: const InputDecoration(
+                      labelText: 'Notes (optional)',
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+          loading: () => const SizedBox(
+            height: 100,
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Text('$e'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        subjectsAsync.maybeWhen(
+          data: (subjects) => ElevatedButton(
+            onPressed: _saving ? null : () => _submit(subjects),
+            child: _saving
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Add Session'),
+          ),
+          orElse: () => const SizedBox.shrink(),
         ),
       ],
     );
