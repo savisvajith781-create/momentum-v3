@@ -7,6 +7,7 @@ import '../providers/subjects_provider.dart';
 import '../providers/stages_provider.dart';
 import '../providers/core_providers.dart';
 import '../providers/timer_provider.dart';
+import '../providers/stats_provider.dart';
 import '../models/session_model.dart';
 import '../theme/app_colors.dart';
 import '../utils/format_utils.dart';
@@ -865,13 +866,34 @@ class _ManualSessionDialogState extends ConsumerState<_ManualSessionDialog> {
   }
 
   Future<void> _submit(List subjects) async {
-    if (_selectedSubjectId == null || subjects.isEmpty) return;
+    if (subjects.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Add a subject first (Settings → Subjects)'),
+        ),
+      );
+      return;
+    }
+
+    if (_selectedSubjectId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pick a subject first')),
+      );
+      return;
+    }
 
     final hours = int.tryParse(_hoursCtrl.text.trim()) ?? 0;
     final minutes = int.tryParse(_minutesCtrl.text.trim()) ?? 0;
     final durationSeconds = (hours * 3600) + (minutes * 60);
 
-    if (durationSeconds <= 0) return;
+    if (durationSeconds <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter at least a few minutes of study time'),
+        ),
+      );
+      return;
+    }
 
     final subject = subjects.firstWhere(
       (s) => s.id == _selectedSubjectId,
@@ -906,18 +928,38 @@ class _ManualSessionDialogState extends ConsumerState<_ManualSessionDialog> {
       durationSeconds: durationSeconds,
     );
 
-    await ref.read(sessionRepositoryProvider).insertSession(session);
+    try {
+      await ref.read(sessionRepositoryProvider).insertSession(session);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save session: $e')),
+        );
+      }
+      return;
+    }
 
     // Refresh whatever views might be showing this data.
     ref.invalidate(sessionsByDateProvider(widget.date));
     ref.invalidate(allSessionsProvider);
+    ref.invalidate(weeklyReportProvider);
+    ref.invalidate(heatmapDataProvider);
+    ref.invalidate(currentStreakProvider);
+    ref.invalidate(subjectStatsProvider);
+    ref.invalidate(dailyStatsRangeProvider);
     if (FormatUtils.isToday(widget.date)) {
       ref.invalidate(todaySessionsProvider);
       ref.invalidate(todayTotalSecondsProvider);
       ref.invalidate(todaySubjectBreakdownProvider);
     }
 
-    if (mounted) Navigator.pop(context);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Session added')),
+    );
   }
 
   @override
