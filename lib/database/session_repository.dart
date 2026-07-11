@@ -171,6 +171,7 @@ class SessionRepository {
         .millisecondsSinceEpoch;
     final endMs = DateTime(end.year, end.month, end.day, 23, 59, 59)
         .millisecondsSinceEpoch;
+    const defaultColor = 0xFF4F8CFF;
 
     final result = await db.rawQuery('''
       SELECT 
@@ -178,13 +179,13 @@ class SessionRepository {
         s.subject_name,
         SUM(s.duration_seconds) as total_seconds,
         COUNT(*) as session_count,
-        COALESCE(sub.color_value, 0xFF4F8CFF) as color_value
+        COALESCE(sub.color_value, ?) as color_value
       FROM ${AppConstants.tableSessions} s
       LEFT JOIN ${AppConstants.tableSubjects} sub ON s.subject_id = sub.id
       WHERE s.start_time >= ? AND s.start_time <= ?
       GROUP BY s.subject_id
       ORDER BY total_seconds DESC
-    ''', [startMs, endMs]);
+    ''', [defaultColor, startMs, endMs]);
 
     return result
         .map((m) => SubjectStats(
@@ -192,7 +193,7 @@ class SessionRepository {
               subjectName: m['subject_name'] as String,
               totalSeconds: (m['total_seconds'] as int?) ?? 0,
               sessionCount: (m['session_count'] as int?) ?? 0,
-              colorValue: (m['color_value'] as int?) ?? 0xFF4F8CFF,
+              colorValue: (m['color_value'] as int?) ?? defaultColor,
             ))
         .toList();
   }
