@@ -122,17 +122,24 @@ final todaySessionsProvider = FutureProvider<List<SessionModel>>((ref) async {
   return ref.read(sessionRepositoryProvider).getSessionsByDate(DateTime.now());
 });
 
-final todayTotalSecondsProvider = FutureProvider<int>((ref) async {
-  final sessions = await ref.watch(todaySessionsProvider.future);
+// These two are deliberately plain (synchronous) Providers, not
+// FutureProviders. The underlying math is instant (just combining an
+// already-fetched session list with the live timer's elapsed seconds), so
+// there's no real async work here. Making them FutureProviders that watch
+// timerProvider caused them to flash through a "loading" state on every
+// single timer tick (once a second) — visible as the whole card blinking
+// blank-then-filled every second. A plain Provider recomputes instantly
+// with no loading phase at all, so this never happens.
+final todayTotalSecondsProvider = Provider<int>((ref) {
+  final sessions = ref.watch(todaySessionsProvider).valueOrNull ?? [];
   final timerState = ref.watch(timerProvider);
   final sessionSeconds = sessions.fold<int>(0, (sum, s) => sum + s.durationSeconds);
   final runningSeconds = timerState.isActive ? timerState.elapsedSeconds : 0;
   return sessionSeconds + runningSeconds;
 });
 
-final todaySubjectBreakdownProvider =
-    FutureProvider<Map<String, int>>((ref) async {
-  final sessions = await ref.watch(todaySessionsProvider.future);
+final todaySubjectBreakdownProvider = Provider<Map<String, int>>((ref) {
+  final sessions = ref.watch(todaySessionsProvider).valueOrNull ?? [];
   final timerState = ref.watch(timerProvider);
   final Map<String, int> breakdown = {};
 
