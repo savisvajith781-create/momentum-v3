@@ -79,14 +79,24 @@ final subjectStatsProvider = FutureProvider.family<List<SubjectStats>,
     ({DateTime start, DateTime end})>((ref, range) async {
   return ref
       .read(sessionRepositoryProvider)
-      .getSubjectStats(range.start, range.end);
+      .getSubjectStats(range.start, range.end)
+      .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception(
+            'Loading subject stats took too long. Try again.'),
+      );
 });
 
 final dailyStatsRangeProvider = FutureProvider.family<List<DailyStats>,
     ({DateTime start, DateTime end})>((ref, range) async {
   return ref
       .read(sessionRepositoryProvider)
-      .getDailyStats(range.start, range.end);
+      .getDailyStats(range.start, range.end)
+      .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception(
+            'Loading daily stats took too long. Try again.'),
+      );
 });
 
 final currentStreakProvider = FutureProvider<int>((ref) async {
