@@ -15,7 +15,14 @@ class SubjectBreakdownWidget extends ConsumerWidget {
 
     return breakdownAsync.when(
       data: (breakdown) {
-        if (breakdown.isEmpty) {
+        // Ignore noise entries under 60 seconds (e.g. an accidental
+        // start/stop tap) so they don't clutter the breakdown with
+        // confusing near-zero percentages.
+        final meaningfulEntries = Map<String, int>.fromEntries(
+          breakdown.entries.where((e) => e.value >= 60),
+        );
+
+        if (meaningfulEntries.isEmpty) {
           return const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
             child: Text(
@@ -26,23 +33,22 @@ class SubjectBreakdownWidget extends ConsumerWidget {
         }
 
         final subjects = subjectsAsync.valueOrNull ?? [];
-        final total = breakdown.values.fold<int>(0, (a, b) => a + b);
-        final entries = breakdown.entries.toList()
+        final total = meaningfulEntries.values.fold<int>(0, (a, b) => a + b);
+        final entries = meaningfulEntries.entries.toList()
           ..sort((a, b) => b.value.compareTo(a.value));
 
         return Column(
           children: entries.map((entry) {
             if (subjects.isEmpty) return const SizedBox.shrink();
-            final subject = subjects.firstWhere(
-              (s) => s.id == entry.key,
-              orElse: () => subjects.first,
-            );
-
-            final fraction = total > 0 ? entry.value / total : 0.0;
-            final matchList = subjects.where((s) => s.id == entry.key).toList();
+            final matchList =
+                subjects.where((s) => s.id == entry.key).toList();
+            final subject = matchList.isNotEmpty ? matchList.first : subjects.first;
             final color = matchList.isNotEmpty ? matchList.first.color : AppColors.primary;
 
+            final fraction = total > 0 ? entry.value / total : 0.0;
+
             return Padding(
+              key: ValueKey(entry.key),
               padding: const EdgeInsets.only(bottom: 10),
               child: Column(
                 children: [
@@ -82,7 +88,7 @@ class SubjectBreakdownWidget extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 5),
-                  _AnimatedBar(fraction: fraction, color: color),
+                  _SmoothBar(fraction: fraction, color: color),
                 ],
               ),
             );
@@ -98,79 +104,37 @@ class SubjectBreakdownWidget extends ConsumerWidget {
   }
 }
 
-class _AnimatedBar extends StatefulWidget {
+/// A progress bar that smoothly glides to its new width whenever [fraction]
+/// changes, using Flutter's implicit animation (no manual AnimationController
+/// to accidentally reset). This stays visually calm even when [fraction]
+/// updates every second from a running timer.
+class _SmoothBar extends StatelessWidget {
   final double fraction;
   final Color color;
 
-  const _AnimatedBar({required this.fraction, required this.color});
-
-  @override
-  State<_AnimatedBar> createState() => _AnimatedBarState();
-}
-
-class _AnimatedBarState extends State<_AnimatedBar>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _anim = Tween<double>(begin: 0, end: widget.fraction).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-    );
-    _controller.forward();
-  }
-
-  @override
-  void didUpdateWidget(_AnimatedBar old) {
-    super.didUpdateWidget(old);
-    if (old.fraction != widget.fraction) {
-      _anim = Tween<double>(begin: _anim.value, end: widget.fraction).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-      );
-      _controller.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  const _SmoothBar({required this.fraction, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => LayoutBuilder(
-        builder: (_, constraints) => Container(
-          height: 4,
-          width: constraints.maxWidth,
-          decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(2),
-          ),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              width: constraints.maxWidth * _anim.value,
-              height: 4,
-              decoration: BoxDecoration(
-                color: widget.color,
-                borderRadius: BorderRadius.circular(2),
-                boxShadow: [
-                  BoxShadow(
-                    color: widget.color.withOpacity(0.4),
-                    blurRadius: 4,
-                    spreadRadius: 0,
-                  ),
-                ],
-              ),
+    final clamped = fraction.clamp(0.0, 1.0);
+    return LayoutBuilder(
+      builder: (_, constraints) => Container(
+        height: 4,
+        width: constraints.maxWidth,
+        decoration: BoxDecoration(
+          color: AppColors.surfaceVariant,
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 500),
+            curve: Curves.easeOut,
+            width: constraints.maxWidth * clamped,
+            height: 4,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
         ),
