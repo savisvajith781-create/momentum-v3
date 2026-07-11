@@ -185,108 +185,96 @@ class _ProgressSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
-    final totalAsync = ref.watch(todayTotalSecondsProvider);
+    final total = ref.watch(todayTotalSecondsProvider);
     final target = settings.dailyTargetSeconds;
 
-    return totalAsync.when(
-      data: (total) {
-        final progress = target > 0 ? (total / target).clamp(0.0, 1.0) : 0.0;
-        final remaining = (target - total).clamp(0, target);
-        final isComplete = total >= target;
+    final progress = target > 0 ? (total / target).clamp(0.0, 1.0) : 0.0;
+    final remaining = (target - total).clamp(0, target);
+    final isComplete = total >= target;
 
-        return SurfaceCard(
-          padding: const EdgeInsets.all(24),
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.surface,
-              AppColors.primary.withOpacity(0.05),
-            ],
-          ),
-          child: Row(
-            children: [
-              ProgressRing(
-                progress: progress,
-                size: 120,
-                strokeWidth: 10,
-                color: isComplete ? AppColors.green : AppColors.primary,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      '${(progress * 100).toStringAsFixed(0)}%',
-                      style: TextStyle(
-                        color:
-                            isComplete ? AppColors.green : AppColors.primary,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const Text(
-                      'done',
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      "TODAY'S GOAL",
-                      style: TextStyle(
-                        color: AppColors.textMuted,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      FormatUtils.formatTargetHours(target),
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _ProgressStat(
-                      label: 'Completed',
-                      value: FormatUtils.formatDurationCompact(total),
-                      color: isComplete ? AppColors.green : AppColors.primary,
-                    ),
-                    const SizedBox(height: 8),
-                    _ProgressStat(
-                      label: 'Remaining',
-                      value: isComplete
-                          ? 'Done! 🎉'
-                          : FormatUtils.formatDurationCompact(remaining),
-                      color: isComplete
-                          ? AppColors.green
-                          : AppColors.textSecondary,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-      loading: () => const SurfaceCard(
-        padding: EdgeInsets.all(24),
-        child: SizedBox(
-          height: 120,
-          child: Center(child: CircularProgressIndicator()),
-        ),
+    return SurfaceCard(
+      padding: const EdgeInsets.all(24),
+      gradient: LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          AppColors.surface,
+          AppColors.primary.withOpacity(0.05),
+        ],
       ),
-      error: (e, _) => Text('$e'),
+      child: Row(
+        children: [
+          ProgressRing(
+            progress: progress,
+            size: 120,
+            strokeWidth: 10,
+            color: isComplete ? AppColors.green : AppColors.primary,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '${(progress * 100).toStringAsFixed(0)}%',
+                  style: TextStyle(
+                    color:
+                        isComplete ? AppColors.green : AppColors.primary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                const Text(
+                  'done',
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 24),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "TODAY'S GOAL",
+                  style: TextStyle(
+                    color: AppColors.textMuted,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  FormatUtils.formatTargetHours(target),
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _ProgressStat(
+                  label: 'Completed',
+                  value: FormatUtils.formatDurationCompact(total),
+                  color: isComplete ? AppColors.green : AppColors.primary,
+                ),
+                const SizedBox(height: 8),
+                _ProgressStat(
+                  label: 'Remaining',
+                  value: isComplete
+                      ? 'Done! 🎉'
+                      : FormatUtils.formatDurationCompact(remaining),
+                  color: isComplete
+                      ? AppColors.green
+                      : AppColors.textSecondary,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
