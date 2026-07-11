@@ -10,96 +10,87 @@ class SubjectBreakdownWidget extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final breakdownAsync = ref.watch(todaySubjectBreakdownProvider);
+    final breakdown = ref.watch(todaySubjectBreakdownProvider);
     final subjectsAsync = ref.watch(subjectsProvider);
 
-    return breakdownAsync.when(
-      data: (breakdown) {
-        // Ignore noise entries under 60 seconds (e.g. an accidental
-        // start/stop tap) so they don't clutter the breakdown with
-        // confusing near-zero percentages.
-        final meaningfulEntries = Map<String, int>.fromEntries(
-          breakdown.entries.where((e) => e.value >= 60),
-        );
+    // Ignore noise entries under 60 seconds (e.g. an accidental
+    // start/stop tap) so they don't clutter the breakdown with
+    // confusing near-zero percentages.
+    final meaningfulEntries = Map<String, int>.fromEntries(
+      breakdown.entries.where((e) => e.value >= 60),
+    );
 
-        if (meaningfulEntries.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'No sessions yet today',
-              style: TextStyle(color: AppColors.textMuted, fontSize: 13),
-            ),
-          );
-        }
+    if (meaningfulEntries.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Text(
+          'No sessions yet today',
+          style: TextStyle(color: AppColors.textMuted, fontSize: 13),
+        ),
+      );
+    }
 
-        final subjects = subjectsAsync.valueOrNull ?? [];
-        final total = meaningfulEntries.values.fold<int>(0, (a, b) => a + b);
-        final entries = meaningfulEntries.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value));
+    final subjects = subjectsAsync.valueOrNull ?? [];
+    final total = meaningfulEntries.values.fold<int>(0, (a, b) => a + b);
+    final entries = meaningfulEntries.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
-        return Column(
-          children: entries.map((entry) {
-            if (subjects.isEmpty) return const SizedBox.shrink();
-            final matchList =
-                subjects.where((s) => s.id == entry.key).toList();
-            final subject = matchList.isNotEmpty ? matchList.first : subjects.first;
-            final color = matchList.isNotEmpty ? matchList.first.color : AppColors.primary;
+    return Column(
+      children: entries.map((entry) {
+        if (subjects.isEmpty) return const SizedBox.shrink();
+        final matchList =
+            subjects.where((s) => s.id == entry.key).toList();
+        final subject = matchList.isNotEmpty ? matchList.first : subjects.first;
+        final color = matchList.isNotEmpty ? matchList.first.color : AppColors.primary;
 
-            final fraction = total > 0 ? entry.value / total : 0.0;
+        final fraction = total > 0 ? entry.value / total : 0.0;
 
-            return Padding(
-              key: ValueKey(entry.key),
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Column(
+        return Padding(
+          key: ValueKey(entry.key),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Column(
+            children: [
+              Row(
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        subject.icon,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          subject.name,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        FormatUtils.formatDurationCompact(entry.value),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${(fraction * 100).toStringAsFixed(0)}%',
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                  Text(
+                    subject.icon,
+                    style: const TextStyle(fontSize: 14),
                   ),
-                  const SizedBox(height: 5),
-                  _SmoothBar(fraction: fraction, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      subject.name,
+                      style: const TextStyle(
+                        color: AppColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    FormatUtils.formatDurationCompact(entry.value),
+                    style: const TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${(fraction * 100).toStringAsFixed(0)}%',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ],
               ),
-            );
-          }).toList(),
+              const SizedBox(height: 5),
+              _SmoothBar(fraction: fraction, color: color),
+            ],
+          ),
         );
-      },
-      loading: () => const SizedBox(
-        height: 40,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-      error: (e, _) => const SizedBox.shrink(),
+      }).toList(),
     );
   }
 }
